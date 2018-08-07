@@ -55,7 +55,7 @@ router.post('/', function(req, res) {
 
     videoFileNameNoExtension = videoFileName.split(".")[0];
     upload_controller.handle_upload(req, res, options, azureSearchName, azureSearchKey, videoFileNameNoExtension);
-    
+    // TODO - delete local video file
   });
 });
 

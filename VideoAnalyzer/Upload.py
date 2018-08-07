@@ -14,7 +14,6 @@ import time
 import nltk
 import sys
 import matplotlib.pyplot as plt
-# import unirest
 from PIL import Image
 import pydocumentdb
 import pydocumentdb.document_client as dc

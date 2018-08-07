@@ -11,7 +11,7 @@ exports.handle_upload = function(req, res, options, azureSearchName, azureSearch
     var dbManager = new DbManager(docDbClient, config.databaseId, config.collectionId);
     dbManager.init(function(err) { if(err) throw err; });
 
-    pythonShell.run('../../VideoAnalyzer.py', options, function (err, data) {
+    pythonShell.run('../VideoAnalyzer/Upload.py', options, function (err, data) {
         if (err) 
            throw err ;
         // res.send(data);

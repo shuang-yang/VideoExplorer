@@ -19,7 +19,7 @@ exports.search_result_video = function(req, res) {
 	
 	console.log('args: ' + options.args);
 
- 	pythonShell.run('../../Search.py', options, function (err, data) {
+ 	pythonShell.run('../VideoAnalyzer/Search.py', options, function (err, data) {
  		if (err) 
 			throw err ;
 		var values = JSON.parse(data[0]).value;
@@ -49,7 +49,7 @@ exports.search_result_catalogue = function(req, res) {
    
    console.log('args: ' + options.args);
 
-	pythonShell.run('../../SearchCatalogue.py', options, function (err, data) {
+	pythonShell.run('../VideoAnalyzer/SearchCatalogue.py', options, function (err, data) {
 		if (err) 
 		   throw err ;
 		var values = JSON.parse(data[0]).value;

@@ -2,5 +2,8 @@ __pycache__/
 data/
 models/
 venv/
-FrontEnd/video-explorer/node_modules
-FrontEnd/video-explorer/public/videos
+FrontEnd/node_modules/
+FrontEnd/public/videos/
+FrontEnd/public/uikit-3.0.0-rc.10/
+*.xml
+*.iml
