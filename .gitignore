@@ -1,0 +1,6 @@
+__pycache__/
+data/
+models/
+venv/
+FrontEnd/video-explorer/node_modules
+FrontEnd/video-explorer/public/videos
