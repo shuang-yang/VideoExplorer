@@ -1,13 +1,6 @@
 import cv2 as cv
-import numpy as np
-import moviepy.editor as mp
 import os
-import requests
-import collections
-import functools
-import matplotlib.pyplot as plt
 from azure.storage.blob import BlockBlobService, PublicAccess
-from concurrent import futures
 from Models import *
 from Utility import *
 from Analyzers import *
@@ -70,7 +63,7 @@ class VideoManager(object):
     def grab_frames(self, filename, start_time, end_time, grab_rate_type, grab_rate):
 
         # Handle invalid input
-        clip = self.handle_invalid_input(end_time, filename, grab_rate, grab_rate_type, start_time)
+        self.handle_invalid_input(end_time, filename, grab_rate, grab_rate_type, start_time)
 
         # Grab frames based on preset grabRate
         filepath = os.path.join(self.curr_dir, filename)
@@ -101,17 +94,11 @@ class VideoManager(object):
         return frame_list
 
     def handle_invalid_input(self, end_time, filename, grab_rate, grab_rate_type, start_time):
-        try:
-            clip = mp.VideoFileClip(os.path.join(self.curr_dir + filename))
-        except FileNotFoundError:
-            raise InvalidInputException(Messages.FILE_NOT_FOUND.value)
-        if start_time < 0 or end_time <= start_time or end_time > clip.duration or start_time >= end_time or int(
+        if start_time < 0 or end_time <= start_time or start_time >= end_time or int(
                 start_time) != start_time or int(end_time) != end_time:
             raise InvalidInputException(Messages.INVALID_START_END_TIME.value)
-        if int(grab_rate) != grab_rate or grab_rate < 0 or (
-                grab_rate_type == GrabRateType.BY_SECOND and grab_rate > clip.duration * 1000):
+        if int(grab_rate) != grab_rate or grab_rate < 0:
             raise InvalidInputException(Messages.INVALID_GRAB_RATE.value)
-        return clip
 
     def clip_video(self, start_time, end_time, filename, clip):
         clipped = clip.subclip(start_time, end_time)
@@ -134,13 +121,4 @@ class VideoManager(object):
 
     def generate_frame_filename(self, filename, index, frame_std_time):
         return os.path.splitext(self.curr_dir + filename)[0] + '_' + frame_std_time + '_' + str(index) + '.jpg'
-
-    def grab_audio(self, filename):
-        clip = mp.VideoFileClip(os.path.join(self.curr_dir, filename))
-        audio_filename = self.generate_audio_filename(filename)
-        clip.audio.write_audiofile(audio_filename)
-        self.blob.upload(audio_filename, 'audio')
-
-    def generate_audio_filename(self, filename):
-        return os.path.splitext(self.curr_dir + filename)[0] + '_Audio.mp3'
 

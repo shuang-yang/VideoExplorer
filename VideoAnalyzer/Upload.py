@@ -2,37 +2,20 @@
 from __future__ import absolute_import
 from __future__ import division, print_function, unicode_literals
 
-import cv2 as cv
-import numpy as np
-import moviepy.editor as mp
 import os
-import requests
-import collections
-import functools
-import json
-import time
-import nltk
 import sys
-import matplotlib.pyplot as plt
-from PIL import Image
-import pydocumentdb
-import pydocumentdb.document_client as dc
-from flask import *
-from enum import Enum
-from azure.storage.blob import BlockBlobService, PublicAccess
-from concurrent import futures
-from wordcloud import WordCloud
+# from wordcloud import WordCloud
 from Models import *
 from Utility import *
 from Analyzers import *
 from DataSourceManagers import *
 from DatabaseManager import *
 from SearchManager import *
-from sumy.parsers.plaintext import PlaintextParser
-from sumy.nlp.tokenizers import Tokenizer
-from sumy.summarizers.lsa import LsaSummarizer
-from sumy.nlp.stemmers import Stemmer
-from sumy.utils import get_stop_words
+# from sumy.parsers.plaintext import PlaintextParser
+# from sumy.nlp.tokenizers import Tokenizer
+# from sumy.summarizers.lsa import LsaSummarizer
+# from sumy.nlp.stemmers import Stemmer
+# from sumy.utils import get_stop_words
 from threading import Thread, Semaphore
 
 CONFIDENCE_THRESHOLD = 0.5
@@ -68,20 +51,22 @@ def create_blob_manager(account_name=blobAccountNameDefault, account_key=blobAcc
     return blob
 
 
-def generate_word_clouds_from_frames(video_data):
-    # Obtain top n keywords
-    top_keywords = video_data.top_keywords_from_frames(10)
-    top_caption_keywords = video_data.top_caption_keywords_from_frames(10)
-    # Generate wordcloud
-    font_path = 'Symbola.ttf'
-    word_cloud = WordCloud(background_color="white", font_path=font_path).generate_from_frequencies(dict(top_keywords))
-    word_cloud.to_file('Suntec_tags_word_cloud.jpg')
-    word_cloud = WordCloud(background_color="white", font_path=font_path).generate_from_frequencies(
-        dict(top_caption_keywords))
-    word_cloud.to_file('Suntec_captions_word_cloud.jpg')
+# def generate_word_clouds_from_frames(video_data):
+#     # Obtain top n keywords
+#     top_keywords = video_data.top_keywords_from_frames(10)
+#     top_caption_keywords = video_data.top_caption_keywords_from_frames(10)
+#     # Generate wordcloud
+#     font_path = 'Symbola.ttf'
+#     word_cloud = WordCloud(background_color="white", font_path=font_path).generate_from_frequencies(dict(top_keywords))
+#     word_cloud.to_file('Suntec_tags_word_cloud.jpg')
+#     word_cloud = WordCloud(background_color="white", font_path=font_path).generate_from_frequencies(
+#         dict(top_caption_keywords))
+#     word_cloud.to_file('Suntec_captions_word_cloud.jpg')
 
 
-def analyze_frames(blob, frame_list, image_analyzer, filename, db_manager, video_id, video_url):
+def analyze_frames(blob, frame_list, image_analyzer, filename, db_manager, video_id, video_url, user_id):
+    docs = []
+
     # Obtain a list of analyses based on the sampled frames asynchronously
     urls = [frame.url for frame in frame_list]
     analyses = image_analyzer.analyze_remote_by_batch(urls)
@@ -106,7 +91,7 @@ def analyze_frames(blob, frame_list, image_analyzer, filename, db_manager, video
         categories = ','.join([category[0] for category in image_data.categories if category[1] >= Constants.CONFIDENCE_THRESHOLD])
         dominant_colors = ','.join(image_data.dominant_colors)
 
-        doc = {'id': new_id, 'video_id': video_id, 'video_url': video_url, 'filename': filename,
+        doc = {'id': new_id, 'user_id': user_id, 'video_id': video_id, 'video_url': video_url, 'filename': filename,
                'index': frame.index, 'time': frame.video_time, 'std_time': frame.video_time_std, 'url': frame.url,
                'tags': tags, 'captions': captions, 'categories': categories, 'celebrities': celebrities, 'landmarks': landmarks,
                'dominant_colors': dominant_colors, 'foreground_color': image_data.foreground_color, 'background_color': image_data.background_color,
@@ -126,26 +111,21 @@ def analyze_frames(blob, frame_list, image_analyzer, filename, db_manager, video
         else:
             db_entry = db_manager.create_doc(Constants.DB_NAME_FRAMES, Constants.COLLECTION_NAME_DEFAULT, doc)
             frame.set_db_entry(db_entry)
+        docs.append(doc)
+    return docs
 
 
-def analyze_faces(blob, frame_list, face_analyzer, filename, db_manager, video_id, video_url):
+def analyze_faces(blob, frame_list, face_analyzer, filename, db_manager, video_id, video_url, docs):
     # Obtain a list of analyses based on the grabbed frames
-    urls = list(map(lambda x: blob.get_blob_url('image', x.name), blob.list_blobs('image')))
+    urls = [frame.url for frame in frame_list]
     analyses = face_analyzer.analyze_remote_by_batch(urls)
 
     # Add Image analyses result to frames
     face_data_lists = map(lambda x: face_analyzer.convert_to_face_data(x), analyses)
-    frame_to_face_data_list = list(zip(frame_list, face_data_lists))
-    output_file = open(videoFileRootPath + "Output_frame_faces_" + filename + ".txt", "w")
-    for frame, face_data_list in frame_to_face_data_list:
+    frame_to_face_data_list = list(zip(frame_list, face_data_lists, docs))
+    for frame, face_data_list, doc in frame_to_face_data_list:
         frame.set_face_data_list(face_data_list)
-        output_file.write('Frame at ' + ms_to_std_time(frame.video_time) + ': \n')
-        output_file.write('Dominant emotion: \n')
-        for emotion in frame.get_predominant_emotions(2):
-            output_file.write(str(emotion) + '\n')
-        output_file.write('Faces: \n')
-        for face in face_data_list:
-            output_file.write(" face " + str(face.id) + '\n')
+        dominant_emotions =',',join(frame.get_predominant_emotions(3))
         output_file.write('\n\n')
     output_file.close()
 
@@ -249,7 +229,7 @@ def extract_landmarks(video_data, db_manager, db_entry):
     return landmarks_str
 
 
-def analyze_video(filename, cv_key, cv_url, start, end, sampling_type, sampling_rate, blob_manager, video_manager, db_manager, video_file_rootpath):
+def analyze_video(filename, cv_key, cv_url, start, end, sampling_type, sampling_rate, blob_manager, video_manager, db_manager, video_file_rootpath, userId):
 
     # Initiate Analyzers
     image_analyzer, face_analyzer, text_analyzer = init_analyzers(video_file_rootpath, cv_key, cv_url)
@@ -266,15 +246,15 @@ def analyze_video(filename, cv_key, cv_url, start, end, sampling_type, sampling_
     new_video_id = db_manager.get_next_id(Constants.DB_NAME_VIDEOS, Constants.COLLECTION_NAME_DEFAULT)
     mutex.release()
 
-    # Create CosmosDB entry
-    doc_summarized = {'id': str(new_video_id), 'name': filename_no_extension, 'start_time': start, 'end_time': end, 'sample_rate': sampling_rate}
+    # Create CosmosDB entry for the summarized info of the video
+    doc_summarized = {'id': str(new_video_id), 'user_id': userId, 'name': filename_no_extension, 'start_time': start, 'end_time': end, 'sample_rate': sampling_rate}
     db_entry_summarized = db_manager.create_doc(Constants.DB_NAME_VIDEOS, Constants.COLLECTION_NAME_DEFAULT, doc_summarized)
 
     # Generate a list of frames
     frame_list = video_manager.grab_frames(filename, start, end, sampling_type, sampling_rate)
 
     # Analyze frames with Computer Vision API
-    analyze_frames(blob_manager, frame_list, image_analyzer, filename_no_extension, db_manager, new_video_id, video_url)
+    analyze_frames(blob_manager, frame_list, image_analyzer, filename_no_extension, db_manager, new_video_id, video_url, userId)
 
     # Analyze frames with Face API
     # analyze_faces(blob_manager, frame_list, face_analyzer, filename_no_extension, db_manager, new_video_id, video_url)
@@ -368,11 +348,8 @@ def run(blobAccountName,
         endTime,
         sampleRate,
         videoFileRootPath,
-        videoFileName):
-
-    # start = time.time()
-    # print('Starting: ' + str(start) + '\n')
-    # sys.stdout.flush()
+        videoFileName,
+        userId):
 
     try:
         # Clears any legacy files
@@ -409,7 +386,7 @@ def run(blobAccountName,
         # Analyze video with specified parameters: start time, end time, sampling rate
         video_id, video_name, video_url = analyze_video(videoFileName, cvKey, cvURL, start=startTime, end=endTime, sampling_type=GrabRateType.BY_SECOND,
                                              sampling_rate=sampleRate, blob_manager=blob_manager, video_manager=video_manager,
-                                             db_manager=db_manager, video_file_rootpath=videoFileRootPath)
+                                             db_manager=db_manager, video_file_rootpath=videoFileRootPath, userId=userId)
 
         # Search using Azure Search
         search_manager = SearchManager(azureSearchName, "2017-11-11",
@@ -431,14 +408,11 @@ def run(blobAccountName,
         print(video_name)
         print(video_url)
         sys.stdout.flush()
-        # end = time.time()
-        # print('Ending: ' + str(end) + '\n')
-        # print('Time elapsed: ' + str(end - start) + '\n')
     except Exception as e:
         print(e.args)
 
 def batch_run():
-    dir = './FrontEnd/video-explorer/public/videos/7/'
+    dir = './FrontEnd/public/videos/7/'
     from os import listdir
     from os.path import isfile, join
     files = [f for f in listdir(dir) if isfile(join(dir, f)) and 'mp4' in f]
@@ -474,42 +448,43 @@ def batch_run():
                                                         db_manager=db_manager, video_file_rootpath=dir, output_file=output_file)
         clear_local_files(dir)
 
-def cluster_analysis():
-    import pandas as pd
-    data = pd.read_csv('final_output.csv')
-    data['topic'] = data[['T0', 'T1', 'T2', 'T3']].idxmax(axis=1)
-    print(data)
-    header = ["video_name", "topic"]
-    data.to_csv('out.csv', columns=header)
-    for i in range(4):
-        font_path = 'Symbola_hint.ttf'
-        wordcloud = WordCloud(background_color="white", font_path=font_path).generate(
-            ' '.join(data[data.topic == 'T' + str(i)]['tag_keywords']))
-        wordcloud.to_file('wordcloud' + str(i) + '.jpg')
+# def cluster_analysis():
+#     import pandas as pd
+#     data = pd.read_csv('final_output.csv')
+#     data['topic'] = data[['T0', 'T1', 'T2', 'T3']].idxmax(axis=1)
+#     print(data)
+#     header = ["video_name", "topic"]
+#     data.to_csv('out.csv', columns=header)
+#     for i in range(4):
+#         font_path = 'Symbola_hint.ttf'
+#         wordcloud = WordCloud(background_color="white", font_path=font_path).generate(
+#             ' '.join(data[data.topic == 'T' + str(i)]['tag_keywords']))
+#         wordcloud.to_file('wordcloud' + str(i) + '.jpg')
 
 # Main Execution Body
 if __name__ == '__main__':
-    blobAccountName = sys.argv[1] if sys.argv[1] != '' else blobAccountNameDefault
-    blobAccountKey = sys.argv[2] if sys.argv[2] != '' else blobAccountKeyDefault
-    cosmosdbEndpoint = sys.argv[3] if sys.argv[3] != '' else cosmosdbEndpointDefault
-    cosmosdbMasterkey = sys.argv[4] if sys.argv[4] != '' else cosmosdbMasterkeyDefault
-    cvKey = sys.argv[5] if sys.argv[5] != '' else cvKeyDefault
-    cvURL = sys.argv[6] if sys.argv[6] != '' else cvURLDefault
-    azureSearchName = sys.argv[7] if sys.argv[7] != '' else azureSearchNameDefault
-    azureSearchKey = sys.argv[8] if sys.argv[8] != '' else azureSearchKeyDefault
-    startTime = int(sys.argv[9]) if sys.argv[9] != '' else startTimeDefault
-    endTime = int(sys.argv[10]) if sys.argv[10] != '' else endTimeDefault
-    sampleRate = int(sys.argv[11]) if sys.argv[11] != '' else sampleRateDefault
-    videoFileRootPath = sys.argv[12] if sys.argv[12] != '' else videoFileRootPathDefault
-    videoFileName = sys.argv[13] if sys.argv[13] != '' else videoFileNameDefault
+    blobAccountName = sys.argv[1]
+    blobAccountKey = sys.argv[2]
+    cosmosdbEndpoint = sys.argv[3]
+    cosmosdbMasterkey = sys.argv[4]
+    cvKey = sys.argv[5]
+    cvURL = sys.argv[6]
+    azureSearchName = sys.argv[7]
+    azureSearchKey = sys.argv[8]
+    startTime = int(sys.argv[9])
+    endTime = int(sys.argv[10])
+    sampleRate = int(sys.argv[11])
+    videoFileRootPath = sys.argv[12]
+    videoFileName = sys.argv[13]
+    userId = sys.argv[14]
 
     run(blobAccountName, blobAccountKey, cosmosdbEndpoint, cosmosdbMasterkey, cvKey, cvURL,
-        azureSearchName, azureSearchKey, startTime, endTime, sampleRate, videoFileRootPath, videoFileName)
+        azureSearchName, azureSearchKey, startTime, endTime, sampleRate, videoFileRootPath, videoFileName, userId)
 
     sys.stdout.flush()
     # run(blobAccountNameDefault, blobAccountKeyDefault, cosmosdbEndpointDefault, cosmosdbMasterkeyDefault, cvKeyDefault, cvURLDefault,
     #     azureSearchNameDefault, azureSearchKeyDefault, startTimeDefault, endTimeDefault, sampleRateDefault,
-    #     './FrontEnd/video-explorer/public/videos/', 'JO.mp4')
+    #     'data/', 'JO.mp4', '1')
 
 
 

@@ -1,9 +1,6 @@
 import requests
 import copy
 import json
-import azure.mgmt.search as search
-import azure.mgmt.search.models as search_models
-import http.client
 
 
 class SearchManager(object):

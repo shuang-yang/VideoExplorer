@@ -1,6 +1,5 @@
 import os
 import requests
-import json
 import time
 from concurrent import futures
 from enum import Enum
