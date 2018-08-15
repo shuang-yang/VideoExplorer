@@ -1,0 +1,8 @@
+{
+    "appService.zipIgnorePattern": [
+        "node_modules{,/**}"
+    ],
+    "appService.deploySubpath": "",
+    "python.pythonPath": "${workspaceFolder}/ve-python/bin/python",
+    "appService.defaultWebAppToDeploy": "/subscriptions/56d1a3c3-8992-49bf-8205-6d67de38ec4d/resourceGroups/appsvc_rg_linux_southeastasia/providers/Microsoft.Web/sites/videoxplorer"
+}

@@ -1,9 +1,10 @@
 __pycache__/
-data/
+VideoAnalyzer/data/
 models/
 venv/
-FrontEnd/node_modules/
-FrontEnd/public/videos/
-FrontEnd/public/uikit-3.0.0-rc.10/
+ve-python
+node_modules/
+public/videos/
+public/uikit-3.0.0-rc.10/
 *.xml
 *.iml
