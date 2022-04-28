@@ -7,7 +7,7 @@
     "devstart": "nodemon ./bin/www"
   },
   "dependencies": {
-    "async": "^2.6.1",
+    "async": "^2.6.4",
     "bcryptjs": "^0.7.12",
     "body-parser": "^1.18.3",
     "child-process": "^1.0.2",
