@@ -9,7 +9,7 @@ cffi==1.11.5
 chardet==3.0.4
 cryptography==2.3
 idna==2.7
-numpy==1.15.0
+numpy==1.22.0
 pycparser==2.18
 pydocumentdb==2.3.2
 python-dateutil==2.7.3
